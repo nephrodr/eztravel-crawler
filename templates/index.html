@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>易遊網票價查詢</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    #loadingSpinner {
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <div class="container py-5">
+    <h2 class="text-center mb-4">來回機票查詢工具</h2>
+    <form id="ticketForm" class="bg-white p-4 rounded shadow-sm">
+      <div class="mb-3 row">
+        <div class="col-md-5">
+          <label class="form-label">出發地</label>
+          <select id="departure" name="departure" class="form-select" required>
+            {% for city in departures %}
+            <option value="{{ city }}">{{ city }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-2 text-center d-flex align-items-end justify-content-center">
+          <button type="button" class="btn btn-outline-secondary mt-4" onclick="swapLocations()">⇄</button>
+        </div>
+
+        <div class="col-md-5">
+          <label class="form-label">目的地</label>
+          <select id="destination" name="destination" class="form-select" required>
+            {% for city in destinations %}
+            <option value="{{ city }}">{{ city }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">第一筆出發日期</label>
+        <input type="date" name="start_date" class="form-control" required />
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">最後一筆出發日期</label>
+        <input type="date" name="end_date" class="form-control" required />
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">旅遊天數（含回程）</label>
+        <input type="number" name="days" class="form-control" value="1" min="1" required />
+      </div>
+
+      <div class="d-grid">
+        <button type="submit" class="btn btn-success">查詢並下載 CSV</button>
+      </div>
+
+      <!-- Spinner -->
+      <div class="text-center mt-3" id="loadingSpinner">
+        <div class="spinner-border text-success" role="status">
+          <span class="visually-hidden">查詢中...</span>
+        </div>
+        <div class="mt-2 text-success">查詢中，請稍候...</div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const originalDestOptions = Array.from(document.querySelectorAll("#destination option")).map(opt => ({
+      value: opt.value,
+      text: opt.text
+    }));
+
+    function updateDestinationOptions() {
+      const dep = document.getElementById("departure").value;
+      const destSelect = document.getElementById("destination");
+      destSelect.innerHTML = "";
+
+      originalDestOptions.forEach(opt => {
+        if (opt.value !== dep) {
+          const option = document.createElement("option");
+          option.value = opt.value;
+          option.text = opt.text;
+          destSelect.appendChild(option);
+        }
+      });
+    }
+
+    function swapLocations() {
+      const dep = document.getElementById("departure");
+      const dest = document.getElementById("destination");
+
+      const temp = dep.value;
+      dep.value = dest.value;
+      updateDestinationOptions();
+      dest.value = temp;  // 將原本的 departure 設為目的地
+    }
+
+    document.getElementById("departure").addEventListener("change", updateDestinationOptions);
+
+    document.getElementById("ticketForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      document.getElementById("loadingSpinner").style.display = "block";
+
+      const form = e.target;
+      const data = {
+        departure: form.departure.value,
+        destination: form.destination.value,
+        start_date: form.start_date.value,
+        end_date: form.end_date.value,
+        days: form.days.value
+      };
+
+      try {
+        const res = await fetch("/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+
+        if (!res.ok) throw new Error("查詢失敗");
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "flight_result.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        alert("✅ 查詢已完成，CSV 已下載！");
+      } catch (err) {
+        alert("❌ 查詢失敗：" + err.message);
+      } finally {
+        document.getElementById("loadingSpinner").style.display = "none";
+      }
+    });
+
+    // 預設初始化
+    window.onload = updateDestinationOptions;
+  </script>
+</body>
+</html>
